@@ -67,6 +67,7 @@ var Config struct {
 	domain            string
 	ip                string
 	remote            string
+	timeout           int
 }
 
 // Parsed command name
@@ -94,6 +95,7 @@ func registerFlags() {
 	cfsslFlagSet.StringVar(&Config.domain, "domain", "", "remote server domain name")
 	cfsslFlagSet.StringVar(&Config.ip, "ip", "", "remote server ip")
 	cfsslFlagSet.StringVar(&Config.remote, "remote", "", "remote CFSSL server")
+	cfsslFlagSet.IntVar(&Config.timeout, "timeout", 0, "TLS timout, 0 for no timeout ")
 }
 
 // usage is the cfssl usage heading. It will be appended with names of defined commands in cmds
@@ -146,6 +148,7 @@ func init() {
 		"genkey":   CLIGenKey,
 		"gencert":  CLIGenCert,
 		"selfsign": CLISelfSign,
+		"scan":     CLIScanner,
 	}
 	// Register all command flags.
 	registerFlags()
