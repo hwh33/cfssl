@@ -152,6 +152,7 @@ func init() {
 		"genkey":   CLIGenKey,
 		"gencert":  CLIGenCert,
 		"selfsign": CLISelfSign,
+		"scan":     CLIScan,
 	}
 	// Register all command flags.
 	registerFlags()
