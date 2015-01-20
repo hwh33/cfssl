@@ -17,34 +17,30 @@ Arguments:
         HOST:    Host(s) to scan (including port)
 Flags:
 `
-
-var scanFlags = []string{"short", "list", "scanner"}
-
+var scanFlags = []string{"short", "list", "family", "scanner"}
 var scanFamilyRegexp, scannerRegexp *regexp.Regexp
 
-func init() {
-	scan.Short = Config.short
-	if Config.scanFamily != "" {
-		scanFamilyRegexp = regexp.MustCompile(Config.scanFamily)
+func regexpLoop(familyFunc func(*scan.Family) error, scannerFunc func(*scan.Scanner) error) (err error) {
+	if Config.family != "" {
+		scanFamilyRegexp = regexp.MustCompile(Config.family)
 	}
 	if Config.scanner != "" {
 		scannerRegexp = regexp.MustCompile(Config.scanner)
 	}
-}
-
-func regexpLoop(familyFunc func(*scan.Family) error, scannerFunc func(*scan.Scanner) error) (err error) {
 	for _, scanFamily := range scan.AllFamilies {
 		isMatch := true
-		if Config.scanFamily != "" {
+		if Config.family != "" {
 			isMatch = scanFamilyRegexp.MatchString(scanFamily.Name)
 		}
 		if isMatch {
-			err = familyFunc(scanFamily)
-			if err != nil {
-				return
+			if Config.scanner == "" {
+				err = familyFunc(scanFamily)
+				if err != nil {
+					return
+				}
 			}
 			for _, scanner := range scanFamily.Scanners {
-				if Config.scanFamily == "" || scannerRegexp.MatchString(scanner.Name) {
+				if Config.scanner == "" || scannerRegexp.MatchString(scanner.Name) {
 					err = scannerFunc(scanner)
 					if err != nil {
 						return
@@ -56,6 +52,7 @@ func regexpLoop(familyFunc func(*scan.Family) error, scannerFunc func(*scan.Scan
 	return
 }
 func scanMain(args []string) (err error) {
+	scan.Short = Config.short
 	var host string
 	if Config.list {
 		err = regexpLoop(

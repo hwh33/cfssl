@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/cloudflare/cfssl/scan/tls"
+	"github.com/cloudflare/cf-tls"
 )
 
 // TLSHandshake contains scanners testing host cipher suite negotiation
