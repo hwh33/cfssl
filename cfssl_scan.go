@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"regexp"
 
 	"github.com/cloudflare/cfssl/scan"
@@ -53,7 +54,6 @@ func regexpLoop(familyFunc func(*scan.Family) error, scannerFunc func(*scan.Scan
 }
 func scanMain(args []string) (err error) {
 	scan.Short = Config.short
-	var host string
 	if Config.list {
 		err = regexpLoop(
 			func(f *scan.Family) error {
@@ -70,9 +70,15 @@ func scanMain(args []string) (err error) {
 		}
 	} else {
 		for len(args) > 0 {
+			var host string
+
 			host, args, err = popFirstArgument(args)
 			if err != nil {
 				return
+			}
+			_, _, err = net.SplitHostPort(host)
+			if err != nil {
+				host = net.JoinHostPort(host, "443")
 			}
 			fmt.Printf("\nScanning %s:\n", host)
 			err = regexpLoop(

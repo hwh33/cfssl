@@ -29,7 +29,7 @@ func sayHello(host string, ciphers []uint16, vers uint16) (cipherIndex int, err 
 	serverCipher, serverVersion, err := conn.SayHello()
 	conn.Close()
 	if serverVersion != vers {
-		err = fmt.Errorf("Server negotiated protocol version we didn't send: %s.", tls.Versions[vers])
+		err = fmt.Errorf("server negotiated protocol version we didn't send: %s", tls.Versions[vers])
 		return
 	}
 	var cipherID uint16
@@ -38,7 +38,7 @@ func sayHello(host string, ciphers []uint16, vers uint16) (cipherIndex int, err 
 			return
 		}
 	}
-	err = fmt.Errorf("Server negotiated ciphersuite we didn't send: %s.", tls.CipherSuites[serverCipher])
+	err = fmt.Errorf("server negotiated ciphersuite we didn't send: %s", tls.CipherSuites[serverCipher])
 	return
 }
 
@@ -69,14 +69,20 @@ func (m cipherVersionMap) Append(vers tlsVers, cipher uint16) {
 	m[vers] = append(m[vers], cipher)
 }
 func (m cipherVersionMap) String() (list string) {
-	for vers, ciphers := range m {
-		list += vers.String() + ":\n\t"
-		list += ciphers.String() + "\n"
+	var vers tlsVers
+	for vers = tls.VersionSSL30; vers <= tls.VersionTLS12; vers++ {
+		if ciphers, ok := m[vers]; ok {
+			list += vers.String() + ":\n\t"
+			list += ciphers.String() + "\n"
+		}
 	}
 	if len(list) > 0 {
 		list = list[:len(list)-1]
 	}
 	return
+}
+func (m cipherVersionMap) Describe() string {
+	return "Lists of host's supported cipher suites based on SSL/TLS Version"
 }
 
 // cipherSuiteScan returns, by TLS Version, the sort list of cipher suites

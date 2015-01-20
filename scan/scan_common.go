@@ -39,7 +39,9 @@ const (
 )
 
 // Output is the result of a Scan, to be stored for potential use by later Scanners.
-type Output interface{}
+type Output interface {
+	fmt.Stringer
+}
 
 // Scanner describes a type of scan to perform on a host.
 type Scanner struct {

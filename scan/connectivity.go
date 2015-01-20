@@ -25,13 +25,26 @@ var Connectivity = &Family{
 	},
 }
 
+type lookupAddrs []string
+
+func (addrs lookupAddrs) String() (ret string) {
+	for _, addr := range addrs { //.([]string)
+		ret += addr + ", "
+	}
+	if len(ret) > 2 {
+		ret = ret[:len(ret)-2]
+	}
+	return
+}
+
 // dnsLookupScan tests that DNS resolution of the host returns at least one address
 func dnsLookupScan(host string) (grade Grade, output Output, err error) {
 	host, _, err = net.SplitHostPort(host)
 	if err != nil {
 		return
 	}
-	addrs, err := net.LookupHost(host)
+	var addrs lookupAddrs
+	addrs, err = net.LookupHost(host)
 	if err != nil || len(addrs) == 0 {
 		return
 	}

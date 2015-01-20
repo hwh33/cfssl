@@ -22,11 +22,12 @@ var TLSSession = &Family{
 
 // sessionCache is a mock ClientSessionCache used to record all stores (i.e. new session tickets)
 type sessionCache struct {
-	cache map[string][]*tls.ClientSessionState
+	cache        map[string][]*tls.ClientSessionState
+	inverseCache map[*tls.ClientSessionState][]string
 }
 
 func newSessionCache() *sessionCache {
-	return &sessionCache{make(map[string][]*tls.ClientSessionState)}
+	return &sessionCache{make(map[string][]*tls.ClientSessionState), make(map[*tls.ClientSessionState][]string)}
 }
 func (s *sessionCache) Get(sessionKey string) (mostRecent *tls.ClientSessionState, ok bool) {
 	states, ok := s.cache[sessionKey]
@@ -38,6 +39,19 @@ func (s *sessionCache) Get(sessionKey string) (mostRecent *tls.ClientSessionStat
 }
 func (s *sessionCache) Put(sessionKey string, cs *tls.ClientSessionState) {
 	s.cache[sessionKey] = append(s.cache[sessionKey], cs)
+	s.inverseCache[cs] = append(s.inverseCache[cs], sessionKey)
+}
+func (s *sessionCache) String() (ret string) {
+	for cs, sessionKeys := range s.inverseCache {
+		ret += fmt.Sprintf("%p", cs) + ": "
+		for _, key := range sessionKeys {
+			ret += fmt.Sprint(key) + ", "
+		}
+	}
+	if len(ret) > 2 {
+		ret = ret[:len(ret)-2]
+	}
+	return
 }
 
 // SessionResumeScan tests that host is able to resume sessions accross all addresses.
@@ -55,31 +69,18 @@ func sessionResumeScan(host string) (grade Grade, output Output, err error) {
 	output = sessions
 	config := &tls.Config{ClientSessionCache: sessions, InsecureSkipVerify: true}
 	for _, ip := range ips {
-		var addr string
-		if ip.To4() != nil {
-			addr = ip.String()
-		} else {
-			addr = "[" + ip.String() + "]"
-		}
 		if len(port) == 0 {
-			port = ":443"
-		} else if port[0] != ':' {
-			port = ":" + port
+			port = "443"
 		}
-		fmt.Println()
+		host = net.JoinHostPort(ip.String(), port)
 		var conn *tls.Conn
-		conn, err = tls.Dial(Network, addr+port, config)
+		conn, err = tls.Dial(Network, host, config)
 		if err != nil {
 			return
 		}
 		conn.Close()
-		if len(sessions.cache) != 1 {
+		if len(sessions.inverseCache) != 1 {
 			return
-		}
-		for _, states := range sessions.cache {
-			if len(states) != 1 {
-				return
-			}
 		}
 	}
 	grade = Good
