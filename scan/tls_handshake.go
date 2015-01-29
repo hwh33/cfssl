@@ -13,7 +13,7 @@ var TLSHandshake = &Family{
 	Description: "Scans for host's SSL/TLS version and cipher suite negotiation",
 	Scanners: []*Scanner{
 		{
-			"CipherSuiteScanner",
+			"CipherSuite",
 			"Determines host's cipher suites accepted and prefered order",
 			cipherSuiteScan,
 		},
@@ -42,37 +42,38 @@ func sayHello(host string, ciphers []uint16, vers uint16) (cipherIndex int, err 
 	return
 }
 
-type tlsVers uint16
-
-func (v tlsVers) String() string {
-	return tls.Versions[uint16(v)]
-}
-
 type cipherList []uint16
 
-func (ciphers cipherList) String() (list string) {
-	for _, cipher := range ciphers {
-		list += fmt.Sprintf("%s(%#04x), ", tls.CipherSuites[cipher], cipher)
+func newCipherList() cipherList {
+	ciphers := make(cipherList, 0, len(tls.CipherSuites))
+	for cipherID := range tls.CipherSuites {
+		ciphers = append(ciphers, cipherID)
 	}
-	if len(list) > 2 {
+	return ciphers
+}
+
+func (ciphers cipherList) String() string {
+	var list = "{"
+	for _, cipherID := range ciphers {
+		list += fmt.Sprintf("%s(%#04x), ", tls.CipherSuites[cipherID], cipherID)
+	}
+	if len(list) > 3 {
 		list = list[:len(list)-2]
 	}
+	list += "}"
 	return list
 }
-func (ciphers cipherList) Append(cipher uint16) {
-	ciphers = append(ciphers, cipher)
-}
 
-type cipherVersionMap map[tlsVers]cipherList
+type cipherVersionMap map[uint16]cipherList
 
-func (m cipherVersionMap) Append(vers tlsVers, cipher uint16) {
+func (m cipherVersionMap) Append(vers uint16, cipher uint16) {
 	m[vers] = append(m[vers], cipher)
 }
 func (m cipherVersionMap) String() (list string) {
-	var vers tlsVers
-	for vers = tls.VersionSSL30; vers <= tls.VersionTLS12; vers++ {
+	var vers uint16
+	for vers = tls.VersionTLS12; vers >= tls.VersionSSL30; vers-- {
 		if ciphers, ok := m[vers]; ok {
-			list += vers.String() + ":\n\t"
+			list += tls.Versions[vers] + ": "
 			list += ciphers.String() + "\n"
 		}
 	}
@@ -89,27 +90,25 @@ func (m cipherVersionMap) Describe() string {
 // supported by the host
 func cipherSuiteScan(host string) (grade Grade, output Output, err error) {
 	ciphersByVersion := make(cipherVersionMap)
-	var ciphers cipherList
-	for cipherID := range tls.CipherSuites {
-		ciphers = append(ciphers, cipherID)
-	}
+	ciphers := newCipherList()
 	var vers uint16
 	for vers = tls.VersionSSL30; vers <= tls.VersionTLS12; vers++ {
 		for {
 			cipherIndex, err := sayHello(host, ciphers, vers)
 			if err != nil {
-				ciphers = append(ciphers, ciphersByVersion[tlsVers(vers)]...)
+				ciphers = append(ciphers, ciphersByVersion[vers]...)
 				break
 			}
-			ciphersByVersion.Append(tlsVers(vers), ciphers[cipherIndex])
+			ciphersByVersion.Append(vers, ciphers[cipherIndex])
 			ciphers = append(ciphers[:cipherIndex], ciphers[cipherIndex+1:]...)
 		}
 
 	}
 	if _, ok := ciphersByVersion[tls.VersionSSL30]; ok {
 		grade = Legacy
+	} else {
+		grade = Good
 	}
 	output = ciphersByVersion
-	grade = Good
 	return
 }
