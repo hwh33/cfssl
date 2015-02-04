@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"net"
+	"os"
 	"regexp"
+	"strings"
+	"text/tabwriter"
 
 	"github.com/cloudflare/cfssl/scan"
 )
@@ -45,11 +49,14 @@ func regexpLoop(familyFunc func(*scan.Family) error, scannerFunc func(*scan.Scan
 	return
 }
 
-var lineStart = regexp.MustCompile("(^|\n)")
-
 // indentPrintln prints a multi-line block with the specified indentation.
-func indentPrintln(indentation, block string) {
-	fmt.Println(lineStart.ReplaceAllString(block, "${1}"+indentation))
+func indentPrintln(block string, indentLevel int) {
+	w := tabwriter.NewWriter(os.Stdout, 0, 4, 4, ' ', 0)
+	scanner := bufio.NewScanner(strings.NewReader(block))
+	for scanner.Scan() {
+		fmt.Fprintf(w, "%s%s\n", strings.Repeat("\t", indentLevel), scanner.Text())
+	}
+	w.Flush()
 }
 func scanMain(args []string) (err error) {
 	scan.Verbose = Config.verbose
@@ -60,7 +67,7 @@ func scanMain(args []string) (err error) {
 				return nil
 			},
 			func(s *scan.Scanner) error {
-				indentPrintln("\t", s.String())
+				indentPrintln(s.String(), 1)
 				return nil
 			},
 		)
@@ -93,7 +100,7 @@ func scanMain(args []string) (err error) {
 					grade, output, err := s.Scan(host)
 					fmt.Printf("%s: %s\n", s.Name, grade)
 					if scan.Verbose && output != nil {
-						indentPrintln("\t", output.String())
+						indentPrintln(output.String(), 1)
 					}
 					return err
 				},

@@ -3,6 +3,7 @@ package scan
 import (
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/cloudflare/cf-tls"
 )
@@ -25,11 +26,14 @@ func sayHello(host string, ciphers []uint16, vers uint16) (cipherIndex int, err 
 	if err != nil {
 		return
 	}
-	conn := tls.Client(tcpConn, &tls.Config{MinVersion: vers, MaxVersion: vers, ServerName: host, CipherSuites: ciphers})
+	conn := tls.Client(tcpConn, &tls.Config{MinVersion: vers, MaxVersion: vers, ServerName: host, CipherSuites: ciphers, SessionTicketsDisabled: true, ClientSessionCache: nil})
 	serverCipher, serverVersion, err := conn.SayHello()
 	conn.Close()
+	if err != nil {
+		return
+	}
 	if serverVersion != vers {
-		err = fmt.Errorf("server negotiated protocol version we didn't send: %s", tls.Versions[vers])
+		err = fmt.Errorf("server negotiated protocol version we didn't send: %s", tls.Versions[serverVersion])
 		return
 	}
 	var cipherID uint16
@@ -41,74 +45,67 @@ func sayHello(host string, ciphers []uint16, vers uint16) (cipherIndex int, err 
 	err = fmt.Errorf("server negotiated ciphersuite we didn't send: %s", tls.CipherSuites[serverCipher])
 	return
 }
-
-type cipherList []uint16
-
-func newCipherList() cipherList {
-	ciphers := make(cipherList, 0, len(tls.CipherSuites))
+func allCiphersIDs() []uint16 {
+	ciphers := make([]uint16, 0, len(tls.CipherSuites))
 	for cipherID := range tls.CipherSuites {
 		ciphers = append(ciphers, cipherID)
 	}
 	return ciphers
 }
 
-func (ciphers cipherList) String() string {
-	var list = "{"
-	for _, cipherID := range ciphers {
-		list += fmt.Sprintf("%s(%#04x), ", tls.CipherSuites[cipherID], cipherID)
-	}
-	if len(list) > 3 {
-		list = list[:len(list)-2]
-	}
-	list += "}"
-	return list
+type cipherVersions struct {
+	cipherID uint16
+	versions []uint16
 }
+type cipherVersionList []cipherVersions
 
-type cipherVersionMap map[uint16]cipherList
-
-func (m cipherVersionMap) Append(vers uint16, cipher uint16) {
-	m[vers] = append(m[vers], cipher)
-}
-func (m cipherVersionMap) String() (list string) {
-	var vers uint16
-	for vers = tls.VersionTLS12; vers >= tls.VersionSSL30; vers-- {
-		if ciphers, ok := m[vers]; ok {
-			list += tls.Versions[vers] + ": "
-			list += ciphers.String() + "\n"
+func (cvList cipherVersionList) String() string {
+	cvStrings := make([]string, len(cvList))
+	for i, c := range cvList {
+		versStrings := make([]string, len(c.versions))
+		for j, vers := range c.versions {
+			versStrings[j] = tls.Versions[vers]
 		}
+		cvStrings[i] = fmt.Sprintf("%s\t%s", tls.CipherSuites[c.cipherID], strings.Join(versStrings, ", "))
 	}
-	if len(list) > 0 {
-		list = list[:len(list)-1]
-	}
-	return
+	return strings.Join(cvStrings, "\n")
 }
-func (m cipherVersionMap) Describe() string {
+func (cvList cipherVersionList) Describe() string {
 	return "Lists of host's supported cipher suites based on SSL/TLS Version"
 }
 
 // cipherSuiteScan returns, by TLS Version, the sort list of cipher suites
 // supported by the host
 func cipherSuiteScan(host string) (grade Grade, output Output, err error) {
-	ciphersByVersion := make(cipherVersionMap)
-	ciphers := newCipherList()
+	var cvList cipherVersionList
+	allCiphers := allCiphersIDs()
 	var vers uint16
-	for vers = tls.VersionSSL30; vers <= tls.VersionTLS12; vers++ {
-		for {
+	for vers = tls.VersionTLS12; vers >= tls.VersionSSL30; vers-- {
+		ciphers := make([]uint16, len(allCiphers))
+		copy(ciphers, allCiphers)
+		for len(ciphers) > 0 {
 			cipherIndex, err := sayHello(host, ciphers, vers)
 			if err != nil {
-				ciphers = append(ciphers, ciphersByVersion[vers]...)
 				break
 			}
-			ciphersByVersion.Append(vers, ciphers[cipherIndex])
+			if vers == tls.VersionSSL30 {
+				grade = Legacy
+			}
+			cipherID := ciphers[cipherIndex]
+			for i, c := range cvList {
+				if cipherID == c.cipherID {
+					cvList[i].versions = append(c.versions, vers)
+					goto exists
+				}
+			}
+			cvList = append(cvList, cipherVersions{cipherID, []uint16{vers}})
+		exists:
 			ciphers = append(ciphers[:cipherIndex], ciphers[cipherIndex+1:]...)
 		}
-
 	}
-	if _, ok := ciphersByVersion[tls.VersionSSL30]; ok {
-		grade = Legacy
-	} else {
+	if grade != Legacy && len(cvList) > 0 {
 		grade = Good
 	}
-	output = ciphersByVersion
+	output = cvList
 	return
 }

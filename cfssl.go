@@ -71,6 +71,10 @@ var Config struct {
 	domain            string
 	ip                string
 	remote            string
+	verbose           bool
+	list              bool
+	family            string
+	scanner           string
 	label             string
 }
 
@@ -99,6 +103,10 @@ func registerFlags() {
 	cfsslFlagSet.StringVar(&Config.domain, "domain", "", "remote server domain name")
 	cfsslFlagSet.StringVar(&Config.ip, "ip", "", "remote server ip")
 	cfsslFlagSet.StringVar(&Config.remote, "remote", "", "remote CFSSL server")
+	cfsslFlagSet.BoolVar(&Config.verbose, "verbose", false, "give more verbose scan output")
+	cfsslFlagSet.BoolVar(&Config.list, "list", false, "list possible scans")
+	cfsslFlagSet.StringVar(&Config.family, "family", "", "regular expression selecting specific scan families to run (defaults to all)")
+	cfsslFlagSet.StringVar(&Config.scanner, "scanner", "", "regular expression selecting specific scanners to run (defaults to all)")
 	cfsslFlagSet.StringVar(&Config.label, "label", "", "key label to use in remote CFSSL server")
 }
 

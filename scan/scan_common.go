@@ -46,6 +46,7 @@ func (g Grade) String() string {
 // Output is the result of a scan, to be stored for potential use by later Scanners.
 type Output interface {
 	fmt.Stringer
+	Describe() string
 }
 
 // Scanner describes a type of scan to perform on a host.

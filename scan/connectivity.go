@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"net"
+	"strings"
 )
 
 // Connectivity contains scanners testing basic connectivity to the host
@@ -17,9 +18,9 @@ var Connectivity = &Family{
 			dnsLookupScan,
 		},
 		{
-			"Dial",
+			"TCPDial",
 			"Host accepts TCP connection",
-			dialScan,
+			tcpDialScan,
 		},
 		{
 			"TLSDial",
@@ -31,14 +32,11 @@ var Connectivity = &Family{
 
 type lookupAddrs []string
 
-func (addrs lookupAddrs) String() (ret string) {
-	for _, addr := range addrs {
-		ret += addr + ", "
-	}
-	if len(ret) > 2 {
-		ret = ret[:len(ret)-2]
-	}
-	return
+func (addrs lookupAddrs) String() string {
+	return strings.Join(addrs, "\n")
+}
+func (addrs lookupAddrs) Describe() string {
+	return "List of host's addresses returned by DNS lookup"
 }
 
 // dnsLookupScan tests that DNS resolution of the host returns at least one address
@@ -59,8 +57,8 @@ func dnsLookupScan(host string) (grade Grade, output Output, err error) {
 	return
 }
 
-// TCPDialScan tests that the host can be connected to through TCP.
-func dialScan(host string) (grade Grade, output Output, err error) {
+// tcpDialScan tests that the host can be connected to through TCP.
+func tcpDialScan(host string) (grade Grade, output Output, err error) {
 	conn, err := Dialer.Dial(Network, host)
 	if err != nil {
 		return
@@ -70,7 +68,7 @@ func dialScan(host string) (grade Grade, output Output, err error) {
 	return
 }
 
-// TLSDialScan tests that the host can perform a TLS Handshake
+// tlsDialScan tests that the host can perform a TLS Handshake.
 func tlsDialScan(host string) (grade Grade, output Output, err error) {
 	conn, err := tls.DialWithDialer(Dialer, Network, host, nil)
 	if err != nil {
