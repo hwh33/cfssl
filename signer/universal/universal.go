@@ -12,9 +12,25 @@ import (
 // Root is used to define where the universal signer gets its public
 // certificate and private keys for signing.
 type Root struct {
-	CertFile    string
-	KeyFile     string
+	Config      map[string]string
 	ForceRemote bool
+}
+
+// a localSignerCheck looks at the Config keys in the Root, and
+// decides whether it has enough information to produce a signer.
+type localSignerCheck func(root *Root, policy *config.Signing) (signer.Signer, bool, error)
+
+// fileBackedSigner determines whether a file-backed local signer is supported.
+func fileBackedSigner(root *Root, policy *config.Signing) (signer.Signer, bool, error) {
+	keyFile := root.Config["key-file"]
+	certFile := root.Config["cert-file"]
+
+	if keyFile == "" {
+		return nil, false, nil
+	}
+
+	signer, err := local.NewSignerFromFile(certFile, keyFile, policy)
+	return signer, true, err
 }
 
 // NewSigner generates a new certificate signer from a Root structure.
@@ -46,7 +62,29 @@ func NewSigner(root Root, policy *config.Signing) (signer.Signer, error) {
 		}
 
 		if policy.NeedsLocalSigner() {
-			s, err = local.NewSignerFromFile(root.CertFile, root.KeyFile, policy)
+			// shouldProvide indicates whether the
+			// function *should* have produced a key. If
+			// it's true, we should use the signer and
+			// error returned. Otherwise, keep looking for
+			// signers.
+			var shouldProvide bool
+			// localSignerList is defined in the
+			// universal_signers*.go files. These activate
+			// and deactivate signers based on build
+			// flags; for example,
+			// universal_signers_pkcs11.go contains a list
+			// of valid signers when PKCS #11 is turned
+			// on.
+			for _, possibleSigner := range localSignerList {
+				s, shouldProvide, err = possibleSigner(&root, policy)
+				if shouldProvide {
+					break
+				}
+			}
+
+			if s == nil {
+				err = cferr.New(cferr.PrivateKeyError, cferr.Unknown)
+			}
 		}
 
 		if policy.NeedsRemoteSigner() {
